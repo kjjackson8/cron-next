@@ -23,6 +23,31 @@ const RANGE_STEP = /^(\d+)-(\d+)\/(\d+)$/;
 const RANGE_ONLY = /^(\d+)-(\d+)$/;
 const SINGLE = /^(\d+)$/;
 
+const MONTH_NAMES = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+];
+const DOW_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+// Cron lets month and day-of-week fields use three-letter names in place of
+// numbers, anywhere a number would be valid (single values, ranges, and
+// ranges with a step). Swapping names for numbers here means the rest of
+// the parser never has to know names exist.
+function substituteNames(
+  spec: string,
+  names: readonly string[],
+  base: number,
+  fieldName: string,
+): string {
+  return spec.replace(/[A-Za-z]+/g, (token) => {
+    const index = names.indexOf(token.toUpperCase());
+    if (index === -1) {
+      throw new CronParseError(`unknown ${fieldName} name "${token}" in "${spec}"`);
+    }
+    return String(index + base);
+  });
+}
+
 function parseField(spec: string, min: number, max: number, fieldName: string): number[] {
   const values = new Set<number>();
 
@@ -123,10 +148,20 @@ export function parseCron(expression: string): CronSchedule {
   const minutes = parseField(minuteSpec, 0, 59, 'minute');
   const hours = parseField(hourSpec, 0, 23, 'hour');
   const domValues = parseField(domSpec, 1, 31, 'day-of-month');
-  const monthValues = parseField(monthSpec, 1, 12, 'month');
+  const monthValues = parseField(
+    substituteNames(monthSpec, MONTH_NAMES, 1, 'month'),
+    1,
+    12,
+    'month',
+  );
 
   // Day-of-week accepts 0-7, where both 0 and 7 mean Sunday.
-  const dowRaw = parseField(dowSpec, 0, 7, 'day-of-week');
+  const dowRaw = parseField(
+    substituteNames(dowSpec, DOW_NAMES, 0, 'day-of-week'),
+    0,
+    7,
+    'day-of-week',
+  );
   const dowValues = Array.from(new Set(dowRaw.map((v) => (v === 7 ? 0 : v)))).sort(
     (a, b) => a - b,
   );

@@ -66,6 +66,24 @@ const NEXT_RUN_CASES: NextRunCase[] = [
     from: '2026-01-01T00:00:00Z',
     expected: '2026-01-01T06:00:00Z',
   },
+  {
+    name: 'named month range is equivalent to its numeric range',
+    expression: '0 0 1 JAN-MAR *',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2027-01-01T00:00:00Z',
+  },
+  {
+    name: 'named day-of-week list, case-insensitive',
+    expression: '0 9 * * mon,Wed,FRI',
+    from: '2026-08-28T00:00:00Z', // Friday, before 9am
+    expected: '2026-08-28T09:00:00Z',
+  },
+  {
+    name: 'named day-of-week range with a step',
+    expression: '0 0 * * MON-FRI/2',
+    from: '2026-08-28T00:00:00Z', // Friday; MON-FRI/2 -> Mon, Wed, Fri
+    expected: '2026-08-31T00:00:00Z', // next Monday
+  },
 ];
 
 for (const testCase of NEXT_RUN_CASES) {
@@ -92,6 +110,9 @@ const INVALID_CASES: InvalidCase[] = [
   { name: 'zero step is meaningless', expression: '*/0 * * * *' },
   { name: 'inverted range', expression: '5-1 * * * *' },
   { name: 'non-numeric segment', expression: 'abc * * * *' },
+  { name: 'unknown month name', expression: '0 0 1 FOO *' },
+  { name: 'unknown day-of-week name', expression: '0 0 * * XYZ' },
+  { name: 'day names are not valid in the day-of-month field', expression: '0 0 MON * *' },
 ];
 
 for (const testCase of INVALID_CASES) {

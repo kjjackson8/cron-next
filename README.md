@@ -18,6 +18,10 @@ cron-next "<cron expression>" [--count N] [--from ISO-8601]
 - `<cron expression>` is a standard 5-field expression: minute, hour,
   day-of-month, month, day-of-week. No seconds field, no year field, no
   `L`/`W`/`#` extensions.
+- The month and day-of-week fields accept three-letter names (`JAN`-`DEC`,
+  `SUN`-`SAT`) anywhere a number is valid, case-insensitively: single
+  values, ranges, and ranges with a step, e.g. `MON-FRI`, `mon,wed,fri`,
+  `JAN-JUN/2`.
 - `--count N` prints the next N run times instead of the default 5.
 - `--from ISO-8601` starts the search from a given timestamp instead of
   now. Useful for reproducing a specific case.
@@ -67,6 +71,9 @@ $ cron-next "30 8 * * 1" --from 2026-01-01T00:00:00Z
 - **Range validation.** `5-1` (inverted), `*/0` (zero step), and
   out-of-bounds values are rejected with a clear error instead of silently
   producing nonsense.
+- **Named months and weekdays.** `JAN-DEC` and `SUN-SAT` work anywhere a
+  number would, including in ranges and steps, and are matched
+  case-insensitively.
 
 See `src/cron.test.ts` for the full table of cases, including the invalid
 expressions that are expected to be rejected.
