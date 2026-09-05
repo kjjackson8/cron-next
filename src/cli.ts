@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 import { parseCron, nextRun } from './cron.js';
+import { explainCron } from './explain.js';
 
 function printUsage(): void {
-  console.log(`Usage: cron-next "<cron expression>" [--count N] [--from ISO-8601]
+  console.log(`Usage: cron-next "<cron expression>" [--count N] [--from ISO-8601] [--explain]
 
 Prints the next N run times (default 5) for a 5-field cron expression
 (minute hour day-of-month month day-of-week). All times are UTC.
+
+  --count N   print N run times instead of the default 5
+  --from T    start the search from ISO-8601 timestamp T instead of now
+  --explain   print a plain-English description of the schedule and exit,
+              without computing any run times
 
 Examples:
   cron-next "*/15 9-17 * * 1-5"
   cron-next "0 0 1 * *" --count 3
   cron-next "30 8 * * 1" --from 2026-01-01T00:00:00Z
+  cron-next "0 0 1 * 1" --explain
 `);
 }
 
@@ -24,10 +31,13 @@ function main(argv: string[]): number {
   const expression = args[0] as string;
   let count = 5;
   let from = new Date();
+  let explain = false;
 
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--count') {
+    if (arg === '--explain') {
+      explain = true;
+    } else if (arg === '--count') {
       const value = args[++i];
       count = Number(value);
       if (!Number.isInteger(count) || count <= 0) {
@@ -50,6 +60,10 @@ function main(argv: string[]): number {
 
   try {
     const schedule = parseCron(expression);
+    if (explain) {
+      console.log(explainCron(schedule));
+      return 0;
+    }
     let cursor = from;
     for (let i = 0; i < count; i++) {
       cursor = nextRun(schedule, cursor);

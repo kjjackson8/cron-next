@@ -12,7 +12,7 @@ actual next run times instead of reasoning it out by hand.
 ## Usage
 
 ```
-cron-next "<cron expression>" [--count N] [--from ISO-8601]
+cron-next "<cron expression>" [--count N] [--from ISO-8601] [--explain]
 ```
 
 - `<cron expression>` is a standard 5-field expression: minute, hour,
@@ -25,6 +25,9 @@ cron-next "<cron expression>" [--count N] [--from ISO-8601]
 - `--count N` prints the next N run times instead of the default 5.
 - `--from ISO-8601` starts the search from a given timestamp instead of
   now. Useful for reproducing a specific case.
+- `--explain` prints a plain-English description of the schedule instead of
+  run times, e.g. "Runs at 00:00, on day 1st of the month, or on Monday."
+  for `0 0 1 * 1`.
 - All output is in UTC, printed as ISO-8601 timestamps.
 
 ### Examples
