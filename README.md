@@ -12,7 +12,7 @@ actual next run times instead of reasoning it out by hand.
 ## Usage
 
 ```
-cron-next "<cron expression>" [--count N] [--from ISO-8601] [--explain]
+cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--explain]
 ```
 
 - `<cron expression>` is a standard 5-field expression: minute, hour,
@@ -25,10 +25,16 @@ cron-next "<cron expression>" [--count N] [--from ISO-8601] [--explain]
 - `--count N` prints the next N run times instead of the default 5.
 - `--from ISO-8601` starts the search from a given timestamp instead of
   now. Useful for reproducing a specific case.
+- `--tz ZONE` matches the cron fields against wall-clock time in an IANA
+  timezone (e.g. `America/New_York`, `Europe/Berlin`) instead of UTC, and
+  prints run times with that zone's offset instead of `Z`. DST transitions
+  are handled the way most schedulers handle them: a run time is computed
+  from whatever offset is in effect for that wall-clock moment, so `0 9 * *
+  *` still means 9am local both before and after the clocks change.
 - `--explain` prints a plain-English description of the schedule instead of
   run times, e.g. "Runs at 00:00, on day 1st of the month, or on Monday."
   for `0 0 1 * 1`.
-- All output is in UTC, printed as ISO-8601 timestamps.
+- Without `--tz`, all output is in UTC, printed as ISO-8601 timestamps.
 
 ### Examples
 
@@ -59,6 +65,15 @@ $ cron-next "30 8 * * 1" --from 2026-01-01T00:00:00Z
 2026-01-05T08:30:00.000Z
 ```
 
+Matching against local time in a specific zone, across a DST transition
+(2026-03-08 is the day US clocks spring forward):
+
+```
+$ cron-next "0 9 * * *" --tz America/New_York --count 2 --from 2026-03-07T00:00:00Z
+2026-03-07T09:00:00-05:00
+2026-03-08T09:00:00-04:00
+```
+
 ## The awkward cases this handles correctly
 
 - **Day-of-month AND day-of-week both restricted.** Standard cron
@@ -77,6 +92,11 @@ $ cron-next "30 8 * * 1" --from 2026-01-01T00:00:00Z
 - **Named months and weekdays.** `JAN-DEC` and `SUN-SAT` work anywhere a
   number would, including in ranges and steps, and are matched
   case-insensitively.
+- **DST transitions with `--tz`.** A daily schedule keeps firing at the
+  same local wall-clock time across a spring-forward or fall-back
+  boundary, which means the gap to the previous run in UTC is 23 or 25
+  hours instead of 24. Timezone data comes from Node's built-in `Intl`
+  support, not a bundled copy of the IANA database.
 
 See `src/cron.test.ts` for the full table of cases, including the invalid
 expressions that are expected to be rejected.

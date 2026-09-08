@@ -132,5 +132,7 @@ export function explainCron(schedule: CronSchedule): string {
     clauses.push(`in ${describeNamed(Array.from(schedule.months), (m) => MONTH_NAMES[m - 1] as string)}`);
   }
 
-  return `Runs ${clauses.join(', ')}.`;
+  const sentence = `Runs ${clauses.join(', ')}.`;
+  if (schedule.timezone === 'UTC') return sentence;
+  return `${sentence} Times are in ${schedule.timezone}.`;
 }

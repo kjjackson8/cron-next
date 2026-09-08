@@ -1,8 +1,9 @@
 // Parses standard 5-field cron expressions (minute hour day-of-month month
 // day-of-week) and computes upcoming run times. No seconds field, no
-// year field, no vixie-cron extensions like L, W or #. All calculations
-// happen in UTC so that results are deterministic regardless of the host's
-// local timezone or DST rules.
+// year field, no vixie-cron extensions like L, W or #. Field matching
+// (minute, hour, day-of-month, day-of-week) is done against wall-clock
+// values in the schedule's timezone, defaulting to UTC, so "0 9 * * *"
+// means 9am local to whatever zone was requested, not 9am UTC.
 
 export class CronParseError extends Error {}
 
@@ -14,6 +15,7 @@ export interface CronSchedule {
   months: Set<number>;
   dowSet: Set<number>;
   dowRestricted: boolean;
+  timezone: string;
 }
 
 const FIELD_NAMES = ['minute', 'hour', 'day-of-month', 'month', 'day-of-week'] as const;
@@ -129,7 +131,20 @@ function validateRange(
   }
 }
 
-export function parseCron(expression: string): CronSchedule {
+function assertValidTimeZone(timezone: string): void {
+  try {
+    // Intl throws RangeError for a timezone name it doesn't recognize;
+    // constructing the formatter is the only reliable way to validate one
+    // without shipping our own copy of the IANA database.
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+  } catch {
+    throw new CronParseError(`unknown timezone "${timezone}"`);
+  }
+}
+
+export function parseCron(expression: string, timezone = 'UTC'): CronSchedule {
+  assertValidTimeZone(timezone);
+
   const parts = expression.trim().split(/\s+/).filter((p) => p.length > 0);
   if (parts.length !== 5) {
     throw new CronParseError(
@@ -174,6 +189,7 @@ export function parseCron(expression: string): CronSchedule {
     months: new Set(monthValues),
     dowSet: new Set(dowValues),
     dowRestricted: dowSpec !== '*',
+    timezone,
   };
 }
 
@@ -209,14 +225,89 @@ function firstTimeOfDay(
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+interface WallClockParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+// Reads the wall-clock date and time that a real instant corresponds to in
+// a given timezone. This is the only piece of timezone knowledge the whole
+// tool needs; everything else is built on top of it.
+function wallClockOf(instant: Date, timeZone: string): WallClockParts {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+    second: get('second'),
+  };
+}
+
+// How far the timezone's clock is ahead of UTC at a given instant, in
+// milliseconds. Varies across the year for zones that observe DST.
+function offsetMsAt(instant: Date, timeZone: string): number {
+  const w = wallClockOf(instant, timeZone);
+  const asIfUtc = Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
+  return asIfUtc - instant.getTime();
+}
+
+// Represents a wall-clock date/time as a Date whose UTC getters give back
+// those same fields, regardless of what timezone it actually describes.
+// This lets nextRun's calendar arithmetic (month/day/day-of-week matching,
+// stepping to the next civil day) stay identical whether the schedule runs
+// in UTC or in some IANA zone: it only ever has to reason about "the civil
+// calendar", never about real elapsed time.
+function toCivil(instant: Date, timeZone: string): Date {
+  if (timeZone === 'UTC') return instant;
+  const w = wallClockOf(instant, timeZone);
+  return new Date(Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second));
+}
+
+// The inverse of toCivil: given a wall-clock date/time meant for timeZone
+// (packed into a Date's UTC fields), finds the real instant it refers to.
+// Starts from a same-numbers-but-UTC guess, corrects it by that guess's
+// offset, then re-checks the offset at the corrected instant in case the
+// correction crossed a DST boundary.
+function fromCivil(civil: Date, timeZone: string): Date {
+  if (timeZone === 'UTC') return civil;
+  const guess = civil.getTime();
+  const offset = offsetMsAt(new Date(guess), timeZone);
+  const corrected = guess - offset;
+  const offset2 = offsetMsAt(new Date(corrected), timeZone);
+  return new Date(offset2 === offset ? corrected : guess - offset2);
+}
+
 /**
- * Returns the next run time strictly after `from`. Searches day by day
- * (fast even for constraints like "Feb 29" that only occur every few years)
- * and then picks the first matching hour/minute within a matching day.
+ * Returns the next run time strictly after `from`, as a real instant (its
+ * UTC value is always correct; only field matching happens in the
+ * schedule's timezone). Searches day by day (fast even for constraints
+ * like "Feb 29" that only occur every few years) and then picks the first
+ * matching hour/minute within a matching day.
  */
 export function nextRun(schedule: CronSchedule, from: Date, maxDays = 5 * 366): Date {
-  const dayStart = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
-  const startMinuteOfDay = from.getUTCHours() * 60 + from.getUTCMinutes() + 1;
+  const civilFrom = toCivil(from, schedule.timezone);
+  const dayStart = Date.UTC(civilFrom.getUTCFullYear(), civilFrom.getUTCMonth(), civilFrom.getUTCDate());
+  const startMinuteOfDay = civilFrom.getUTCHours() * 60 + civilFrom.getUTCMinutes() + 1;
 
   for (let i = 0; i <= maxDays; i++) {
     const candidate = new Date(dayStart + i * MS_PER_DAY);
@@ -227,7 +318,7 @@ export function nextRun(schedule: CronSchedule, from: Date, maxDays = 5 * 366): 
     const found = firstTimeOfDay(schedule.hours, schedule.minutes, minMinuteOfDay);
     if (found === null) continue;
 
-    return new Date(
+    const civilResult = new Date(
       Date.UTC(
         candidate.getUTCFullYear(),
         candidate.getUTCMonth(),
@@ -236,7 +327,24 @@ export function nextRun(schedule: CronSchedule, from: Date, maxDays = 5 * 366): 
         found.minute,
       ),
     );
+    return fromCivil(civilResult, schedule.timezone);
   }
 
   throw new Error(`no run found within ${maxDays} days of ${from.toISOString()}`);
+}
+
+/** Formats an instant as an ISO-8601 string in the given timezone, with an
+ * explicit UTC offset instead of "Z" (except for UTC itself, which keeps
+ * the familiar trailing "Z"). */
+export function formatInZone(instant: Date, timeZone: string): string {
+  if (timeZone === 'UTC') return instant.toISOString();
+  const w = wallClockOf(instant, timeZone);
+  const offsetMinutesTotal = Math.round(offsetMsAt(instant, timeZone) / 60000);
+  const sign = offsetMinutesTotal < 0 ? '-' : '+';
+  const absMinutes = Math.abs(offsetMinutesTotal);
+  const offset = `${sign}${pad2(Math.floor(absMinutes / 60))}:${pad2(absMinutes % 60)}`;
+  return (
+    `${w.year}-${pad2(w.month)}-${pad2(w.day)}T${pad2(w.hour)}:${pad2(w.minute)}:${pad2(w.second)}` +
+    offset
+  );
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCron, nextRun, CronParseError } from './cron.js';
+import { parseCron, nextRun, formatInZone, CronParseError } from './cron.js';
 
 interface NextRunCase {
   name: string;
@@ -125,4 +125,37 @@ test('nextRun advances strictly after "from", even on an exact match', () => {
   const schedule = parseCron('0 * * * *');
   const result = nextRun(schedule, new Date('2026-01-01T05:00:00Z'));
   assert.equal(result.toISOString(), '2026-01-01T06:00:00Z');
+});
+
+test('nextRun rejects an unknown timezone name', () => {
+  assert.throws(() => parseCron('* * * * *', 'Not/AZone'), CronParseError);
+});
+
+test('nextRun matches fields against wall-clock time in the given timezone', () => {
+  // 09:00 in New York on Jan 1 2026 (standard time, UTC-5) is 14:00 UTC.
+  const schedule = parseCron('0 9 * * *', 'America/New_York');
+  const result = nextRun(schedule, new Date('2026-01-01T00:00:00Z'));
+  assert.equal(result.toISOString(), '2026-01-01T14:00:00.000Z');
+});
+
+test('nextRun follows the DST offset change across a spring-forward transition', () => {
+  // US DST starts 2026-03-08 at 02:00 local (EST, UTC-5, springs forward to
+  // EDT, UTC-4). 09:00 local on Mar 7 is still EST; 09:00 local on Mar 8,
+  // after the 02:00 jump, is already EDT.
+  const schedule = parseCron('0 9 * * *', 'America/New_York');
+  const first = nextRun(schedule, new Date('2026-03-07T00:00:00Z'));
+  assert.equal(first.toISOString(), '2026-03-07T14:00:00.000Z');
+  const second = nextRun(schedule, first);
+  assert.equal(second.toISOString(), '2026-03-08T13:00:00.000Z');
+});
+
+test('formatInZone renders UTC with the familiar "Z" suffix', () => {
+  assert.equal(formatInZone(new Date('2026-01-01T14:00:00Z'), 'UTC'), '2026-01-01T14:00:00.000Z');
+});
+
+test('formatInZone renders a non-UTC zone with an explicit offset', () => {
+  assert.equal(
+    formatInZone(new Date('2026-01-01T14:00:00Z'), 'America/New_York'),
+    '2026-01-01T09:00:00-05:00',
+  );
 });

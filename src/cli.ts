@@ -1,15 +1,18 @@
 #!/usr/bin/env node
-import { parseCron, nextRun } from './cron.js';
+import { parseCron, nextRun, formatInZone } from './cron.js';
 import { explainCron } from './explain.js';
 
 function printUsage(): void {
-  console.log(`Usage: cron-next "<cron expression>" [--count N] [--from ISO-8601] [--explain]
+  console.log(`Usage: cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--explain]
 
 Prints the next N run times (default 5) for a 5-field cron expression
-(minute hour day-of-month month day-of-week). All times are UTC.
+(minute hour day-of-month month day-of-week). Field matching and printed
+times are in UTC unless --tz is given.
 
   --count N   print N run times instead of the default 5
   --from T    start the search from ISO-8601 timestamp T instead of now
+  --tz ZONE   match fields and print times in an IANA timezone (e.g.
+              "America/New_York") instead of UTC
   --explain   print a plain-English description of the schedule and exit,
               without computing any run times
 
@@ -17,6 +20,7 @@ Examples:
   cron-next "*/15 9-17 * * 1-5"
   cron-next "0 0 1 * *" --count 3
   cron-next "30 8 * * 1" --from 2026-01-01T00:00:00Z
+  cron-next "0 9 * * 1-5" --tz America/New_York
   cron-next "0 0 1 * 1" --explain
 `);
 }
@@ -32,11 +36,19 @@ function main(argv: string[]): number {
   let count = 5;
   let from = new Date();
   let explain = false;
+  let timezone = 'UTC';
 
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--explain') {
       explain = true;
+    } else if (arg === '--tz') {
+      const value = args[++i];
+      if (!value) {
+        console.error('--tz requires a timezone name, e.g. "America/New_York"');
+        return 1;
+      }
+      timezone = value;
     } else if (arg === '--count') {
       const value = args[++i];
       count = Number(value);
@@ -59,7 +71,7 @@ function main(argv: string[]): number {
   }
 
   try {
-    const schedule = parseCron(expression);
+    const schedule = parseCron(expression, timezone);
     if (explain) {
       console.log(explainCron(schedule));
       return 0;
@@ -67,7 +79,7 @@ function main(argv: string[]): number {
     let cursor = from;
     for (let i = 0; i < count; i++) {
       cursor = nextRun(schedule, cursor);
-      console.log(cursor.toISOString());
+      console.log(formatInZone(cursor, timezone));
     }
     return 0;
   } catch (err) {
