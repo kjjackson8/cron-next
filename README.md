@@ -12,7 +12,7 @@ actual next run times instead of reasoning it out by hand.
 ## Usage
 
 ```
-cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--explain]
+cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--prev] [--explain]
 ```
 
 - `<cron expression>` is a standard 5-field expression: minute, hour,
@@ -31,6 +31,9 @@ cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--expla
   are handled the way most schedulers handle them: a run time is computed
   from whatever offset is in effect for that wall-clock moment, so `0 9 * *
   *` still means 9am local both before and after the clocks change.
+- `--prev` prints the N most recent run times *before* `--from` (or before
+  now) instead of the N upcoming ones. Combine with `--from` to look up
+  what a schedule's last few runs would have been at a given point in time.
 - `--explain` prints a plain-English description of the schedule instead of
   run times, e.g. "Runs at 00:00, on day 1st of the month, or on Monday."
   for `0 0 1 * 1`.
@@ -63,6 +66,15 @@ Starting the search from a fixed point in time:
 ```
 $ cron-next "30 8 * * 1" --from 2026-01-01T00:00:00Z
 2026-01-05T08:30:00.000Z
+```
+
+Looking backward instead of forward, from a fixed point in time:
+
+```
+$ cron-next "0 0 1 * *" --prev --count 3 --from 2026-09-12T00:00:00Z
+2026-09-01T00:00:00.000Z
+2026-08-01T00:00:00.000Z
+2026-07-01T00:00:00.000Z
 ```
 
 Matching against local time in a specific zone, across a DST transition

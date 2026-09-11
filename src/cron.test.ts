@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCron, nextRun, formatInZone, CronParseError } from './cron.js';
+import { parseCron, nextRun, prevRun, formatInZone, CronParseError } from './cron.js';
 
 interface NextRunCase {
   name: string;
@@ -158,4 +158,88 @@ test('formatInZone renders a non-UTC zone with an explicit offset', () => {
     formatInZone(new Date('2026-01-01T14:00:00Z'), 'America/New_York'),
     '2026-01-01T09:00:00-05:00',
   );
+});
+
+interface PrevRunCase {
+  name: string;
+  expression: string;
+  from: string;
+  expected: string;
+}
+
+// prevRun mirrors nextRun's day-by-day search but walks backward, so these
+// cases lean on the same tricky semantics from the other direction rather
+// than re-testing every field type.
+const PREV_RUN_CASES: PrevRunCase[] = [
+  {
+    name: 'steps back to the previous multiple, not just any earlier minute',
+    expression: '*/15 * * * *',
+    from: '2026-01-01T00:20:00Z',
+    expected: '2026-01-01T00:15:00Z',
+  },
+  {
+    name: 'business hours skip the weekend and roll back to Friday',
+    expression: '0 9-17 * * 1-5',
+    from: '2026-08-31T05:00:00Z', // Monday, before the first matching hour
+    expected: '2026-08-28T17:00:00Z', // previous Friday
+  },
+  {
+    name: 'day-of-month and day-of-week both restricted match on EITHER, not AND',
+    expression: '0 0 1 * 1',
+    from: '2026-08-31T12:00:00Z', // Monday the 31st; most recent match is that same day
+    expected: '2026-08-31T00:00:00Z',
+  },
+  {
+    name: 'Feb 29 only fires on leap years, so the previous run can be years back',
+    expression: '0 0 29 2 *',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2024-02-29T00:00:00Z',
+  },
+  {
+    name: 'named day-of-week list, case-insensitive',
+    expression: '0 9 * * mon,Wed,FRI',
+    from: '2026-08-28T08:00:00Z', // Friday, before 9am
+    expected: '2026-08-26T09:00:00Z', // Wednesday
+  },
+];
+
+for (const testCase of PREV_RUN_CASES) {
+  test(`prevRun: ${testCase.name}`, () => {
+    const schedule = parseCron(testCase.expression);
+    const result = prevRun(schedule, new Date(testCase.from));
+    assert.equal(result.toISOString(), testCase.expected);
+  });
+}
+
+test('prevRun steps back strictly before "from", even on an exact match', () => {
+  const schedule = parseCron('0 * * * *');
+  const result = prevRun(schedule, new Date('2026-01-01T05:00:00Z'));
+  assert.equal(result.toISOString(), '2026-01-01T04:00:00.000Z');
+});
+
+test('prevRun matches fields against wall-clock time in the given timezone', () => {
+  // 09:00 in New York on Jan 1 2026 is 14:00 UTC.
+  const schedule = parseCron('0 9 * * *', 'America/New_York');
+  const result = prevRun(schedule, new Date('2026-01-02T00:00:00Z'));
+  assert.equal(result.toISOString(), '2026-01-01T14:00:00.000Z');
+});
+
+test('prevRun follows the DST offset change across a fall-back transition', () => {
+  // US DST ends 2026-11-01 at 02:00 local (EDT, UTC-4, falls back to EST,
+  // UTC-5). The 02:00 rollback happens before 09:00, so 09:00 local on the
+  // transition day (Nov 1) is already EST; 09:00 local the day before
+  // (Oct 31) is still EDT, a full hour apart in UTC.
+  const schedule = parseCron('0 9 * * *', 'America/New_York');
+  const result = prevRun(schedule, new Date('2026-11-01T14:01:00Z'));
+  assert.equal(result.toISOString(), '2026-11-01T14:00:00.000Z');
+  const earlier = prevRun(schedule, result);
+  assert.equal(earlier.toISOString(), '2026-10-31T13:00:00.000Z');
+});
+
+test('prevRun applied to a run found by nextRun lands on the run before it', () => {
+  const schedule = parseCron('30 8 * * 1-5');
+  const next = nextRun(schedule, new Date('2026-08-28T00:00:00Z')); // Friday 08:30
+  assert.equal(next.toISOString(), '2026-08-28T08:30:00.000Z');
+  const before = prevRun(schedule, next);
+  assert.equal(before.toISOString(), '2026-08-27T08:30:00.000Z'); // Thursday 08:30
 });

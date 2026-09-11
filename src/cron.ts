@@ -223,6 +223,23 @@ function firstTimeOfDay(
   return null;
 }
 
+// hours and minutes are sorted ascending, so the last time of day at or
+// before maxMinuteOfDay is found by walking both from the end.
+function lastTimeOfDay(
+  hours: number[],
+  minutes: number[],
+  maxMinuteOfDay: number,
+): { hour: number; minute: number } | null {
+  for (let hi = hours.length - 1; hi >= 0; hi--) {
+    const hour = hours[hi] as number;
+    for (let mi = minutes.length - 1; mi >= 0; mi--) {
+      const minute = minutes[mi] as number;
+      if (hour * 60 + minute <= maxMinuteOfDay) return { hour, minute };
+    }
+  }
+  return null;
+}
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function pad2(n: number): string {
@@ -331,6 +348,41 @@ export function nextRun(schedule: CronSchedule, from: Date, maxDays = 5 * 366): 
   }
 
   throw new Error(`no run found within ${maxDays} days of ${from.toISOString()}`);
+}
+
+/**
+ * Returns the previous run time strictly before `from`, as a real instant.
+ * Mirrors nextRun exactly, just walking backward through days and picking
+ * the last matching hour/minute of each candidate day instead of the first.
+ */
+export function prevRun(schedule: CronSchedule, from: Date, maxDays = 5 * 366): Date {
+  const civilFrom = toCivil(from, schedule.timezone);
+  const dayStart = Date.UTC(civilFrom.getUTCFullYear(), civilFrom.getUTCMonth(), civilFrom.getUTCDate());
+  const startMinuteOfDay = civilFrom.getUTCHours() * 60 + civilFrom.getUTCMinutes() - 1;
+
+  for (let i = 0; i <= maxDays; i++) {
+    const candidate = new Date(dayStart - i * MS_PER_DAY);
+    if (!monthMatches(schedule, candidate)) continue;
+    if (!dayMatches(schedule, candidate)) continue;
+
+    const maxMinuteOfDay = i === 0 ? startMinuteOfDay : 24 * 60 - 1;
+    if (maxMinuteOfDay < 0) continue;
+    const found = lastTimeOfDay(schedule.hours, schedule.minutes, maxMinuteOfDay);
+    if (found === null) continue;
+
+    const civilResult = new Date(
+      Date.UTC(
+        candidate.getUTCFullYear(),
+        candidate.getUTCMonth(),
+        candidate.getUTCDate(),
+        found.hour,
+        found.minute,
+      ),
+    );
+    return fromCivil(civilResult, schedule.timezone);
+  }
+
+  throw new Error(`no run found within ${maxDays} days before ${from.toISOString()}`);
 }
 
 /** Formats an instant as an ISO-8601 string in the given timezone, with an
