@@ -129,3 +129,15 @@ node dist/cli.js "*/15 * * * *"
 tsc
 node --test dist/*.test.js
 ```
+
+## Installing globally
+
+```
+npm install -g .
+```
+
+This builds `dist/` via the `prepare` script and links the `cron-next` binary
+onto your `PATH`, so you can run `cron-next "*/15 * * * *"` from anywhere
+instead of `node dist/cli.js ...`. To try changes without a full install,
+`npm link` from the project directory does the same thing but points back
+at the working copy.
