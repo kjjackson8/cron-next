@@ -13,6 +13,7 @@ actual next run times instead of reasoning it out by hand.
 
 ```
 cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--prev] [--explain]
+cron-next --version
 ```
 
 - `<cron expression>` is a standard 5-field expression: minute, hour,
@@ -37,6 +38,8 @@ cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--prev]
 - `--explain` prints a plain-English description of the schedule instead of
   run times, e.g. "Runs at 00:00, on day 1st of the month, or on Monday."
   for `0 0 1 * 1`.
+- `--version` prints the installed version and exits, ignoring any other
+  arguments.
 - Without `--tz`, all output is in UTC, printed as ISO-8601 timestamps.
 
 ### Examples

@@ -1,6 +1,14 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseCron, nextRun, prevRun, formatInZone } from './cron.js';
 import { explainCron } from './explain.js';
+
+function readVersion(): string {
+  const packageJsonPath = fileURLToPath(new URL('../package.json', import.meta.url));
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version: string };
+  return packageJson.version;
+}
 
 function printUsage(): void {
   console.log(`Usage: cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--prev] [--explain]
@@ -17,6 +25,8 @@ times are in UTC unless --tz is given.
               instead of the N upcoming ones
   --explain   print a plain-English description of the schedule and exit,
               without computing any run times
+  --version   print the installed cron-next version and exit
+  --help      print this message and exit
 
 Examples:
   cron-next "*/15 9-17 * * 1-5"
@@ -33,6 +43,10 @@ function main(argv: string[]): number {
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     printUsage();
     return args.length === 0 ? 1 : 0;
+  }
+  if (args[0] === '--version' || args[0] === '-v') {
+    console.log(readVersion());
+    return 0;
   }
 
   const expression = args[0] as string;
