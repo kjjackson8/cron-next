@@ -18,7 +18,10 @@ cron-next --version
 
 - `<cron expression>` is a standard 5-field expression: minute, hour,
   day-of-month, month, day-of-week. No seconds field, no year field, no
-  `L`/`W`/`#` extensions.
+  `L`/`W`/`#` extensions. In place of the 5 fields you can use one of the
+  vixie-cron nicknames: `@yearly` (or `@annually`), `@monthly`, `@weekly`,
+  `@daily` (or `@midnight`), `@hourly`. There's no `@reboot`: it isn't a
+  schedule with a "next run time", and this tool doesn't run as a daemon.
 - The month and day-of-week fields accept three-letter names (`JAN`-`DEC`,
   `SUN`-`SAT`) anywhere a number is valid, case-insensitively: single
   values, ranges, and ranges with a step, e.g. `MON-FRI`, `mon,wed,fri`,
@@ -107,6 +110,9 @@ $ cron-next "0 9 * * *" --tz America/New_York --count 2 --from 2026-03-07T00:00:
 - **Named months and weekdays.** `JAN-DEC` and `SUN-SAT` work anywhere a
   number would, including in ranges and steps, and are matched
   case-insensitively.
+- **Nickname shorthands.** `@weekly` means "at midnight on Sunday"
+  (`0 0 * * 0`), not "every 7 days from whenever you happen to ask" -
+  nicknames expand to a fixed schedule, same as real crontabs.
 - **DST transitions with `--tz`.** A daily schedule keeps firing at the
   same local wall-clock time across a spring-forward or fall-back
   boundary, which means the gap to the previous run in UTC is 23 or 25

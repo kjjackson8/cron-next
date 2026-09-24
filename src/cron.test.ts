@@ -84,6 +84,54 @@ const NEXT_RUN_CASES: NextRunCase[] = [
     from: '2026-08-28T00:00:00Z', // Friday; MON-FRI/2 -> Mon, Wed, Fri
     expected: '2026-08-31T00:00:00Z', // next Monday
   },
+  {
+    name: '@yearly is midnight on Jan 1st',
+    expression: '@yearly',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2027-01-01T00:00:00Z',
+  },
+  {
+    name: '@annually is an alias for @yearly',
+    expression: '@annually',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2027-01-01T00:00:00Z',
+  },
+  {
+    name: '@monthly is midnight on the 1st of the month',
+    expression: '@monthly',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2026-09-01T00:00:00Z',
+  },
+  {
+    name: '@weekly is midnight on Sunday',
+    expression: '@weekly',
+    from: '2026-08-28T00:00:00Z', // Friday
+    expected: '2026-08-30T00:00:00Z', // Sunday
+  },
+  {
+    name: '@daily is midnight every day',
+    expression: '@daily',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2026-08-29T00:00:00Z',
+  },
+  {
+    name: '@midnight is an alias for @daily',
+    expression: '@midnight',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2026-08-29T00:00:00Z',
+  },
+  {
+    name: '@hourly is the top of every hour',
+    expression: '@hourly',
+    from: '2026-08-28T00:30:00Z',
+    expected: '2026-08-28T01:00:00Z',
+  },
+  {
+    name: 'nickname matching is case-insensitive',
+    expression: '@DAILY',
+    from: '2026-08-28T00:00:00Z',
+    expected: '2026-08-29T00:00:00Z',
+  },
 ];
 
 for (const testCase of NEXT_RUN_CASES) {
@@ -113,6 +161,8 @@ const INVALID_CASES: InvalidCase[] = [
   { name: 'unknown month name', expression: '0 0 1 FOO *' },
   { name: 'unknown day-of-week name', expression: '0 0 * * XYZ' },
   { name: 'day names are not valid in the day-of-month field', expression: '0 0 MON * *' },
+  { name: 'unknown nickname', expression: '@fortnightly' },
+  { name: '@reboot is not a schedule this tool supports', expression: '@reboot' },
 ];
 
 for (const testCase of INVALID_CASES) {

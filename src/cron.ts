@@ -31,6 +31,19 @@ const MONTH_NAMES = [
 ];
 const DOW_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
+// The vixie-cron nicknames, expanded to the 5-field form they've always
+// stood in for. @reboot is deliberately left out: it isn't a schedule, it
+// has no "next run time", and this tool has no daemon to hook it into.
+const NICKNAMES: Record<string, string> = {
+  '@yearly': '0 0 1 1 *',
+  '@annually': '0 0 1 1 *',
+  '@monthly': '0 0 1 * *',
+  '@weekly': '0 0 * * 0',
+  '@daily': '0 0 * * *',
+  '@midnight': '0 0 * * *',
+  '@hourly': '0 * * * *',
+};
+
 // Cron lets month and day-of-week fields use three-letter names in place of
 // numbers, anywhere a number would be valid (single values, ranges, and
 // ranges with a step). Swapping names for numbers here means the rest of
@@ -145,7 +158,17 @@ function assertValidTimeZone(timezone: string): void {
 export function parseCron(expression: string, timezone = 'UTC'): CronSchedule {
   assertValidTimeZone(timezone);
 
-  const parts = expression.trim().split(/\s+/).filter((p) => p.length > 0);
+  const trimmed = expression.trim();
+  let resolved = trimmed;
+  if (trimmed.startsWith('@')) {
+    const nickname = NICKNAMES[trimmed.toLowerCase()];
+    if (!nickname) {
+      throw new CronParseError(`unknown nickname "${trimmed}"`);
+    }
+    resolved = nickname;
+  }
+
+  const parts = resolved.trim().split(/\s+/).filter((p) => p.length > 0);
   if (parts.length !== 5) {
     throw new CronParseError(
       `expected 5 fields (${FIELD_NAMES.join(' ')}), got ${parts.length} in "${expression}"`,

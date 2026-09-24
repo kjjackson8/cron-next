@@ -14,8 +14,9 @@ function printUsage(): void {
   console.log(`Usage: cron-next "<cron expression>" [--count N] [--from ISO-8601] [--tz ZONE] [--prev] [--explain]
 
 Prints the next N run times (default 5) for a 5-field cron expression
-(minute hour day-of-month month day-of-week). Field matching and printed
-times are in UTC unless --tz is given.
+(minute hour day-of-month month day-of-week), or one of the nickname
+shorthands: @yearly, @annually, @monthly, @weekly, @daily, @midnight,
+@hourly. Field matching and printed times are in UTC unless --tz is given.
 
   --count N   print N run times instead of the default 5
   --from T    start the search from ISO-8601 timestamp T instead of now
@@ -35,6 +36,7 @@ Examples:
   cron-next "0 9 * * 1-5" --tz America/New_York
   cron-next "0 0 1 * *" --prev --count 3
   cron-next "0 0 1 * 1" --explain
+  cron-next "@daily" --count 3
 `);
 }
 
